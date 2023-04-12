@@ -75,7 +75,7 @@ def main():
                         help='Direction to synchronize Dropbox')
     parser.add_argument('--fromLocal', action='store_true',
                         help='Direction to synchronize Dropbox')
-        parser.add_argument('--verbose', '-v', action='store_true',
+    parser.add_argument('--verbose', '-v', action='store_true',
                         help='Show all Take default answer on all questions')
     # Parser arguments
     args = parser.parse_args()

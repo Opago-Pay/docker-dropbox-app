@@ -248,7 +248,7 @@ class UpDown(Thread, PatternMatchingEventHandler):
                             name_file = basename.split(".")[0]
                             date = f"{mtime_dt}".replace(" ", "_").replace(":", "")
                             path = os.path.join(os.path.dirname(path),
-                                                basename.replace(name_file, f"{name_file}_CONFLICT_{date}_"))
+                                               basename.replace(name_file, f"{name_file}_CONFLICT_{date}_"))
                             logger.warn(f"Rename in {path}")
                         # Store file
                         self.storefile(res, path, md.client_modified)
@@ -374,6 +374,10 @@ class UpDown(Thread, PatternMatchingEventHandler):
                                                     client_modified=datetime(*time.gmtime(mtime)[:6]),
                                                     mute=True)
                     except dropbox.exceptions.ApiError as err:
+                        if isinstance(err.error, dropbox.files.UploadError) and err.error.is_path() and err.error.get_path().is_conflict():
+                            logger.warning(f"Conflict detected for {path}. Renaming and retrying.")
+                            new_name = f"{name}_CONFLICT_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                            return self.upload(fullname, subfolder, new_name, overwrite)
                         logger.error(f"API ERROR {err.user_message_text}")
                         return None
             else:
@@ -385,7 +389,15 @@ class UpDown(Thread, PatternMatchingEventHandler):
                 with self.stopwatch(f"upload {file_size} bytes"):
                     while f.tell() < file_size:
                         if ((file_size - f.tell()) <= CHUNK_SIZE):
-                            res = self.dbx.files_upload_session_finish(f.read(CHUNK_SIZE), cursor, commit)
+                            try:
+                                res = self.dbx.files_upload_session_finish(f.read(CHUNK_SIZE), cursor, commit)
+                            except dropbox.exceptions.ApiError as err:
+                                if isinstance(err.error, dropbox.files.UploadError) and err.error.is_path() and err.error.get_path().is_conflict():
+                                    logger.warning(f"Conflict detected for {path}. Renaming and retrying.")
+                                    new_name = f"{name}_CONFLICT_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                                    return self.upload(fullname, subfolder, new_name, overwrite)
+                                logger.error(f"API ERROR {err.user_message_text}")
+                                return None
                         else:
                             self.dbx.files_upload_session_append(f.read(CHUNK_SIZE), cursor.session_id, cursor.offset)
                             cursor.offset = f.tell()

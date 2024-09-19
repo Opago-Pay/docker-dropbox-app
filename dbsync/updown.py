@@ -376,8 +376,10 @@ class UpDown(Thread, PatternMatchingEventHandler):
                     except dropbox.exceptions.ApiError as err:
                         if isinstance(err.error, dropbox.files.UploadError) and err.error.is_path() and err.error.get_path().is_conflict():
                             logger.warning(f"Conflict detected for {path}. Renaming and retrying.")
-                            new_name = f"{name}_CONFLICT_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                            return self.upload(fullname, subfolder, new_name, overwrite)
+                            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+                            new_subfolder = os.path.join(subfolder, name)
+                            new_name = f"{timestamp}"
+                            return self.upload(fullname, new_subfolder, new_name, overwrite)
                         logger.error(f"API ERROR {err.user_message_text}")
                         return None
             else:
@@ -394,8 +396,10 @@ class UpDown(Thread, PatternMatchingEventHandler):
                             except dropbox.exceptions.ApiError as err:
                                 if isinstance(err.error, dropbox.files.UploadError) and err.error.is_path() and err.error.get_path().is_conflict():
                                     logger.warning(f"Conflict detected for {path}. Renaming and retrying.")
-                                    new_name = f"{name}_CONFLICT_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                                    return self.upload(fullname, subfolder, new_name, overwrite)
+                                    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+                                    new_subfolder = os.path.join(subfolder, name)
+                                    new_name = f"{timestamp}"
+                                    return self.upload(fullname, new_subfolder, new_name, overwrite)
                                 logger.error(f"API ERROR {err.user_message_text}")
                                 return None
                         else:

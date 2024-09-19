@@ -147,25 +147,15 @@ class UpDown(Thread):
             logger.debug(f"Total elapsed time for {message}: {(t1 - t0):.3f}")
 
     def run(self):
-        # List of subfolders to upload
-        subfolders = [
-            "lnbits",
-            "lnd",
-            "nocodb",
-            "postgres",
-            "dashboard"
-        ]
         while True:
             logger.info("Starting backup upload")
-            for subfolder in subfolders:
-                folder_path = os.path.join(self.folder, subfolder)
-                for root, dirs, files in os.walk(folder_path):
-                    for name in files:
-                        fullname = os.path.join(root, name)
-                        rel_subfolder = os.path.relpath(root, self.folder)
-                        try:
-                            self.upload(fullname, rel_subfolder, name)
-                        except PermissionError as e:
-                            logger.error(f"PermissionError: {e}")
+            for root, dirs, files in os.walk(self.folder):
+                for name in files:
+                    fullname = os.path.join(root, name)
+                    rel_subfolder = os.path.relpath(root, self.folder)
+                    try:
+                        self.upload(fullname, rel_subfolder, name)
+                    except PermissionError as e:
+                        logger.error(f"PermissionError: {e}")
             logger.info("Backup upload completed")
             time.sleep(self.interval)

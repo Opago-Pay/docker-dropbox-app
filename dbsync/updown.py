@@ -24,27 +24,21 @@ import os
 import posixpath
 import logging
 import time
-import contextlib  # Import contextlib
+import contextlib
 from datetime import datetime
 from threading import Thread
 import dropbox
-from watchdog.events import PatternMatchingEventHandler
 
 # Create logger for jplotlib
 logger = logging.getLogger(__name__)
 # Chunk size dimension
 CHUNK_SIZE = 4 * 1024 * 1024
-# Ignored pattern
-IGNORE_PATTERNS = ["*.swp", "*.goutputstream*"]
 
-class UpDown(Thread, PatternMatchingEventHandler):
+class UpDown(Thread):
 
-    def __init__(self, app_key, app_secret, refresh_token, folder, dropboxignore=".dropboxignore",
-                 interval=0.5, overwrite=""):
+    def __init__(self, app_key, app_secret, refresh_token, folder, interval=86400, overwrite=""):
         Thread.__init__(self)
-        PatternMatchingEventHandler.__init__(self, ignore_patterns=IGNORE_PATTERNS)
         self.folder = folder
-        self.dropboxignore = dropboxignore
         self.interval = interval
         self.overwrite = overwrite
 
@@ -54,8 +48,6 @@ class UpDown(Thread, PatternMatchingEventHandler):
             logger.info("Refresh token retrieved: '" + refresh_token + "' (keep it for next run)")
         # Load Dropbox library
         self.dbx = dropbox.Dropbox(app_key=app_key, app_secret=app_secret, oauth2_refresh_token=refresh_token)
-        # Load DropboxIgnore list
-        self.excludes = self.loadDropboxIgnore()
         # Status initialization
         logger.info(f"Dropbox folder name: {folder}")
         logger.debug(f"Local directory: {folder}")
@@ -81,20 +73,6 @@ class UpDown(Thread, PatternMatchingEventHandler):
             print('Error: %s' % (e,))
             exit(1)
         return oauth_result.refresh_token
-
-    def loadDropboxIgnore(self):
-        """Load Dropbox Ignore file and exclude these files from the list."""
-        excludes = r'$.'
-        path = os.path.join(self.folder, self.dropboxignore)
-        ignore_files = []
-        if os.path.exists(path) and os.path.isfile(path):
-            with open(path, 'r') as f:
-                ignore_files = f.read().splitlines()
-        if ignore_files:
-            # Update exclude list
-            excludes = r'|'.join([fnmatch.translate(x) for x in ignore_files]) or r'$.'
-            logger.warning(f"Ignore dropbox files: {ignore_files}")
-        return excludes
 
     def normalizePath(self, subfolder, name):
         """Normalize folder for Dropbox synchronization."""
@@ -171,22 +149,13 @@ class UpDown(Thread, PatternMatchingEventHandler):
             t1 = time.time()
             logger.debug(f"Total elapsed time for {message}: {(t1 - t0):.3f}")
 
-    def on_created(self, event):
-        subfolder, name = self.getFolderAndFile(event.src_path)
-        if not re.match(self.excludes, name):
-            logger.debug(f"Created {name} in folder: \"{subfolder}\"")
-            self.upload(event.src_path, subfolder, name)
-
-    def on_modified(self, event):
-        if not event.is_directory:
-            subfolder, name = self.getFolderAndFile(event.src_path)
-            if not re.match(self.excludes, name):
-                logger.debug(f"Modified {name} in folder: \"{subfolder}\"")
-                self.upload(event.src_path, subfolder, name, overwrite=True)
-
-    def getFolderAndFile(self, src_path):
-        abs_path = os.path.dirname(src_path)
-        subfolder = os.path.relpath(abs_path, self.folder)
-        subfolder = subfolder if subfolder != "." else ""
-        name = os.path.basename(src_path)
-        return subfolder, name
+    def run(self):
+        while True:
+            logger.info("Starting backup upload")
+            for root, dirs, files in os.walk(self.folder):
+                for name in files:
+                    fullname = os.path.join(root, name)
+                    subfolder = os.path.relpath(root, self.folder)
+                    self.upload(fullname, subfolder, name, overwrite=self.overwrite)
+            logger.info("Backup upload completed")
+            time.sleep(self.interval)

@@ -109,12 +109,11 @@ def main():
 
     # Start updown sync with refresh token, passing date components
     updown = UpDown(
-        args.appKey,
-        args.appSecret,
-        args.refreshToken,
-        folder,          # dbfolder parameter
-        args.rootdir,
-        interval=args.interval,
+        app_key=args.appKey,
+        app_secret=args.appSecret,
+        refresh_token=args.refreshToken,
+        folder=folder,
+        interval=86400,  # 24 hours in seconds
         overwrite=overwrite
     )
     updown.start()

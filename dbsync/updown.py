@@ -52,12 +52,13 @@ class UpDown(Thread):
         logger.debug(f"Local directory: {folder}")
 
         # Initialize date components for consistent paths
-        self.timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         self.year = datetime.now().strftime('%Y')
         self.month = datetime.now().strftime('%m')
+        self.day = datetime.now().strftime('%d')
+        self.time = datetime.now().strftime('%H%M%S')
 
-        # Set db_folder to '/year/month/timestamp'
-        self.db_folder = posixpath.join('/', self.year, self.month, self.timestamp)
+        # Set db_folder to '/year/month/day/time'
+        self.db_folder = posixpath.join('/', self.year, self.month, self.day, self.time)
 
     def get_refresh_token(self, app_key, app_secret):
         auth_flow = dropbox.DropboxOAuth2FlowNoRedirect(app_key, app_secret, token_access_type='offline')

@@ -104,15 +104,19 @@ def main():
     else:
         overwrite = ""
 
-    # Set dbfolder to args.folder
+    # Set folder to args.folder without timestamp
     folder = args.folder
 
-    # Start updown sync with refresh token, designed for long living
-    updown = UpDown(args.appKey, args.appSecret, args.refreshToken, folder, rootdir, interval=args.interval,
-                    overwrite=overwrite)
-
-    # Run observer
-    logger.info("Server started")
+    # Start updown sync with refresh token, passing date components
+    updown = UpDown(
+        args.appKey,
+        args.appSecret,
+        args.refreshToken,
+        folder,          # dbfolder parameter
+        args.rootdir,
+        interval=args.interval,
+        overwrite=overwrite
+    )
     updown.start()
     # Run loop
     try:

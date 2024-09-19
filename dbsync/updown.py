@@ -36,11 +36,10 @@ CHUNK_SIZE = 4 * 1024 * 1024
 
 class UpDown(Thread):
 
-    def __init__(self, app_key, app_secret, refresh_token, folder, interval=86400, overwrite=""):
+    def __init__(self, app_key, app_secret, refresh_token, folder, interval=86400):
         Thread.__init__(self)
         self.folder = folder
         self.interval = interval
-        self.overwrite = overwrite
 
         if not refresh_token:
             logger.info("Refresh token not set. Calling Dropbox API to generate it.")
@@ -80,13 +79,11 @@ class UpDown(Thread):
         path = posixpath.join(*filter(None, parts))
         return path
 
-    def upload(self, fullname, subfolder, name, overwrite=False):
+    def upload(self, fullname, subfolder, name):
         """Upload a file or directory."""
         # Build the Dropbox path
         path = self.normalizePath(subfolder, name)
-        mode = (dropbox.files.WriteMode.overwrite
-                if overwrite
-                else dropbox.files.WriteMode.add)
+        mode = dropbox.files.WriteMode.add
         mtime = os.path.getmtime(fullname)
 
         if os.path.isdir(fullname):
@@ -167,7 +164,7 @@ class UpDown(Thread):
                         fullname = os.path.join(root, name)
                         rel_subfolder = os.path.relpath(root, self.folder)
                         try:
-                            self.upload(fullname, rel_subfolder, name, overwrite=self.overwrite)
+                            self.upload(fullname, rel_subfolder, name)
                         except PermissionError as e:
                             logger.error(f"PermissionError: {e}")
             logger.info("Backup upload completed")

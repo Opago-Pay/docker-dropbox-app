@@ -96,16 +96,6 @@ def main():
     elif not os.path.isdir(rootdir):
         print(f"{bcolors.FAIL}{rootdir} is not a folder on your filesystem{bcolors.ENDC}")
         sys.exit(1)
-    # Configure type of overwrite
-    if args.fromDropbox:
-        overwrite = "dropbox"
-    elif args.fromLocal:
-        overwrite = "host"
-    else:
-        overwrite = ""
-
-    # Set folder to args.folder without timestamp
-    folder = args.folder
 
     # Start updown sync with refresh token, passing date components
     updown = UpDown(
@@ -113,8 +103,7 @@ def main():
         app_secret=args.appSecret,
         refresh_token=args.refreshToken,
         folder=folder,
-        interval=86400,  # 24 hours in seconds
-        overwrite=args.overwrite
+        interval=86400  # 24 hours in seconds
     )
     updown.start()
     # Run loop

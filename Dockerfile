@@ -37,6 +37,9 @@ LABEL org.label-schema.build-date=$BUILD_DATE \
 # Install requirements
 COPY requirements.txt /root
 RUN pip install -r /root/requirements.txt
+# Install setuptools
+RUN pip install --upgrade pip setuptools
+
 # Define default dropbox folder in docker
 ENV DROPBOX_APP_KEY=""
 ENV DROPBOX_APP_SECRET=""

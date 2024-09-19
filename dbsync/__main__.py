@@ -104,9 +104,8 @@ def main():
     else:
         overwrite = ""
 
-    # Add timestamp subfolder
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    folder = os.path.join(folder, timestamp)
+    # Set dbfolder to args.folder
+    folder = args.folder
 
     # Start updown sync with refresh token, designed for long living
     updown = UpDown(args.appKey, args.appSecret, args.refreshToken, folder, rootdir, interval=args.interval,

@@ -110,6 +110,11 @@ class UpDown(Thread, PatternMatchingEventHandler):
         logger.info(f"Dropbox folder name: {dbfolder}")
         logger.debug(f"Local directory: {folder}")
 
+        # Initialize date components for consistent paths
+        self.timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        self.year = datetime.now().strftime('%Y')
+        self.month = datetime.now().strftime('%m')
+
     def run(self):
         while not self.stopped.wait(self.interval):
             logger.debug("Dropbox remote sync")
@@ -170,18 +175,16 @@ class UpDown(Thread, PatternMatchingEventHandler):
 
     @dropboxignore
     def on_moved(self, event):
-        if re.search(CONFLICT, event.dest_path):
-            return
-        if any([fnmatch.fnmatch(event.src_path, pattern) for pattern in IGNORE_PATTERNS]):
-            subfolder, name = self.getFolderAndFile(event.dest_path)
-            logger.debug(f"Modified {event.dest_path}")
-            # Syncronization from Local to Dropbox
-            self.upload(event.dest_path, subfolder, name, overwrite=True)
-            return
-        src_subfolder = os.path.relpath(event.src_path, self.folder)
-        dest_subfolder = os.path.relpath(event.dest_path, self.folder)
-        logger.debug(f"Move from {src_subfolder} to {dest_subfolder}")
-        self.move(src_subfolder, dest_subfolder)
+        subfolder_src, name_src = self.getFolderAndFile(event.src_path)
+        subfolder_dest, name_dest = self.getFolderAndFile(event.dest_path)
+        # Adjust subfolders to include date components
+        new_subfolder_src = os.path.join(self.year, self.month, self.timestamp, subfolder_src)
+        new_subfolder_dest = os.path.join(self.year, self.month, self.timestamp, subfolder_dest)
+        logger.debug(f"Move from {new_subfolder_src}/{name_src} to {new_subfolder_dest}/{name_dest}")
+        self.move(
+            self.normalizePath(new_subfolder_src, name_src),
+            self.normalizePath(new_subfolder_dest, name_dest)
+        )
 
     def syncFromHost(self, overwrite=False, remove=False):
         logger.info("Start sync from host")
@@ -341,72 +344,74 @@ class UpDown(Thread, PatternMatchingEventHandler):
         return data
 
     def normalizePath(self, subfolder, name):
-        """ Normalize folder for Dropbox syncronization.
-        """
-        path = f"/{self.db_folder}/{subfolder.replace(os.path.sep, '/')}/{name}"
-        while '//' in path:
-            path = path.replace('//', '/')
+        """ Normalize folder for Dropbox synchronization. """
+        parts = [self.db_folder, subfolder.replace(os.path.sep, '/'), name]
+        # Remove empty strings to prevent double slashes
+        path = '/' + '/'.join(filter(None, parts))
         return path
 
     def upload(self, fullname, subfolder, name, overwrite=False):
-        """Upload a file.
-            Return the request response, or None in case of error.
+        """Upload a file or directory.
+           Return the request response, or None in case of error.
         """
-        path = self.normalizePath(subfolder, name)
+        # Adjust subfolder to include date components
+        new_subfolder = os.path.join(self.year, self.month, self.timestamp, subfolder)
+
+        # Build the Dropbox path
+        path = self.normalizePath(new_subfolder, name)
         mode = (dropbox.files.WriteMode.overwrite
                 if overwrite
                 else dropbox.files.WriteMode.add)
         mtime = os.path.getmtime(fullname)
+
         if os.path.isdir(fullname):
             try:
                 res = self.dbx.files_create_folder(path)
+                logger.debug(f"Created folder at {path}")
             except dropbox.exceptions.ApiError as err:
-                logger.error(f"API ERROR {err.user_message_text}")
+                logger.error(f"API ERROR {err}")
                 return None
+            return res
         else:
-            f = open(fullname, 'rb')
-            file_size = os.path.getsize(fullname)
-            if file_size <= CHUNK_SIZE:
-                data = f.read()
-                with self.stopwatch(f"upload {file_size} bytes"):
-                    try:
-                        res = self.dbx.files_upload(data, path, mode,
-                                                    client_modified=datetime(*time.gmtime(mtime)[:6]),
-                                                    mute=True)
-                    except dropbox.exceptions.ApiError as err:
-                        if isinstance(err.error, dropbox.files.UploadError) and err.error.is_path() and err.error.get_path().is_conflict():
-                            logger.warning(f"Conflict detected for {path}. Renaming and retrying.")
-                            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-                            new_subfolder = os.path.join(subfolder, name)
-                            new_name = f"{timestamp}"
-                            return self.upload(fullname, new_subfolder, new_name, overwrite)
-                        logger.error(f"API ERROR {err.user_message_text}")
-                        return None
-            else:
-                upload_session_start_result = self.dbx.files_upload_session_start(f.read(CHUNK_SIZE))
-                cursor = dropbox.files.UploadSessionCursor(session_id=upload_session_start_result.session_id,
-                                                           offset=f.tell())
-                commit = dropbox.files.CommitInfo(path=path)
-                # Upload file
-                with self.stopwatch(f"upload {file_size} bytes"):
-                    while f.tell() < file_size:
-                        if ((file_size - f.tell()) <= CHUNK_SIZE):
-                            try:
-                                res = self.dbx.files_upload_session_finish(f.read(CHUNK_SIZE), cursor, commit)
-                            except dropbox.exceptions.ApiError as err:
-                                if isinstance(err.error, dropbox.files.UploadError) and err.error.is_path() and err.error.get_path().is_conflict():
-                                    logger.warning(f"Conflict detected for {path}. Renaming and retrying.")
-                                    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-                                    new_subfolder = os.path.join(subfolder, name)
-                                    new_name = f"{timestamp}"
-                                    return self.upload(fullname, new_subfolder, new_name, overwrite)
-                                logger.error(f"API ERROR {err.user_message_text}")
-                                return None
-                        else:
-                            self.dbx.files_upload_session_append(f.read(CHUNK_SIZE), cursor.session_id, cursor.offset)
-                            cursor.offset = f.tell()
-            # Info data uploaded
-            logger.debug(f"uploaded as {res.name.encode('utf8')}")
+            with open(fullname, 'rb') as f:
+                file_size = os.path.getsize(fullname)
+                if file_size <= CHUNK_SIZE:
+                    data = f.read()
+                    with self.stopwatch(f"upload {file_size} bytes"):
+                        try:
+                            res = self.dbx.files_upload(
+                                data, path, mode,
+                                client_modified=datetime(*time.gmtime(mtime)[:6]),
+                                mute=True
+                            )
+                            logger.debug(f"Uploaded file to {path}")
+                        except dropbox.exceptions.ApiError as err:
+                            logger.error(f"API ERROR {err}")
+                            return None
+                else:
+                    # Handle large files in chunks
+                    upload_session_start_result = self.dbx.files_upload_session_start(f.read(CHUNK_SIZE))
+                    cursor = dropbox.files.UploadSessionCursor(
+                        session_id=upload_session_start_result.session_id,
+                        offset=f.tell()
+                    )
+                    commit = dropbox.files.CommitInfo(path=path)
+                    with self.stopwatch(f"upload {file_size} bytes"):
+                        while f.tell() < file_size:
+                            if (file_size - f.tell()) <= CHUNK_SIZE:
+                                try:
+                                    res = self.dbx.files_upload_session_finish(
+                                        f.read(CHUNK_SIZE), cursor, commit
+                                    )
+                                    logger.debug(f"Uploaded large file to {path}")
+                                except dropbox.exceptions.ApiError as err:
+                                    logger.error(f"API ERROR {err}")
+                                    return None
+                            else:
+                                self.dbx.files_upload_session_append(
+                                    f.read(CHUNK_SIZE), cursor.session_id, cursor.offset
+                                )
+                                cursor.offset = f.tell()
         return res
 
     def delete(self, subfolder, name):

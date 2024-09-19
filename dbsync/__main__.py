@@ -102,7 +102,7 @@ def main():
         app_key=args.appKey,
         app_secret=args.appSecret,
         refresh_token=args.refreshToken,
-        folder=folder,
+        folder=os.path.join(rootdir, "OpagoMain"),  # Ensure we are only uploading from /dropbox/OpagoMain
         interval=86400  # 24 hours in seconds
     )
     updown.start()

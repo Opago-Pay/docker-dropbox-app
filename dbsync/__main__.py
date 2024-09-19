@@ -114,7 +114,7 @@ def main():
         refresh_token=args.refreshToken,
         folder=folder,
         interval=86400,  # 24 hours in seconds
-        overwrite=overwrite
+        overwrite=args.overwrite
     )
     updown.start()
     # Run loop
